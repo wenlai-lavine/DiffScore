@@ -1,0 +1,124 @@
+model:
+  name: "GSAI-ML/LLaDA-8B-Instruct"
+  dtype: "bfloat16"
+  device: "cuda"
+  mask_token: "[MASK]"
+  max_length: 2048
+
+scoring:
+  K: 50              # total Monte Carlo samples (K=20 empirically optimal, see exp0 test4)
+  T: 10              # number of discrete timesteps
+  normalize: "length" # none | length | idf
+  bi_alpha: 0.7      # weight for bidirectional configuration (0.7 empirically better than 0.5)
+  scoring_mode: "mean_lp"  # elbo | mean_lp | weighted (mean_lp is more stable, avoids 1/t variance)
+  min_t: 0.05        # minimum timestep (avoid degenerate t→0)
+  exclude_t_1: true  # exclude t=1.0 timestep (full masking provides no useful signal)
+
+efficiency:
+  batch_masking: true
+  stratified_sampling: true
+  early_stopping:
+    enabled: false
+    patience: 5
+    threshold: 0.01
+  max_batch_size: 8
+
+prompt_templates:
+  summarization:
+    prefix: "Below is a source document and its summary. Read both carefully.\n\nSource document:\n"
+    mid: "\n\nSummary:\n"
+    suffix: ""
+    system: "Below is a source document. The following is a summary of the document."
+  summarization_simple:
+    prefix: "Document: "
+    mid: "\n\nSummary: "
+    suffix: ""
+    system: "Below is a source document. The following is a summary of the document."
+  translation:
+    prefix: "Source ({src_lang}): "
+    mid: "\n\nTranslation ({tgt_lang}): "
+    suffix: ""
+    system: "Below is a source text and its translation."
+  dialogue:
+    prefix: "Below is a dialogue context and a response. Read both carefully.\n\nDialogue context:\n"
+    mid: "\n\nResponse to evaluate:\n"
+    suffix: ""
+    system: "Below is a dialogue context and a response."
+  dialogue_v2:
+    prefix: "The following is a conversation:\n"
+    mid: "\n\nThe last response is:\n"
+    suffix: ""
+    system: "Below is a dialogue context and a response."
+  dialogue_truncated:
+    prefix: "Recent dialogue:\n"
+    mid: "\n\nResponse:\n"
+    suffix: ""
+    system: "Below is a dialogue context and a response."
+  data2text:
+    prefix: "Data: "
+    mid: "\n\nText: "
+    suffix: ""
+    system: "Below is structured data. The following is a natural language description of the data."
+  simplification:
+    prefix: "Original sentence:\n"
+    mid: "\n\nSimplified version:\n"
+    suffix: ""
+    system: "Below is an original sentence and its simplified version."
+  concept2text:
+    prefix: "Concepts: "
+    mid: "\n\nGenerated sentence: "
+    suffix: ""
+    system: "Below are concepts. The following is a sentence generated from the concepts."
+
+benchmarks:
+  # WMT (Machine Translation) — preference-based Kendall τ
+  wmt:
+    lang_pairs: ["de-en", "fi-en", "gu-en", "kk-en", "lt-en", "ru-en", "zh-en"]
+    data_dir: "datasets/WMT"
+    eval_type: "preference_kendall"
+  # SUM (Summarization) — per-document Spearman/Kendall
+  sum:
+    datasets: ["SummEval", "Newsroom", "REALSumm", "Rank19", "QAGS_CNN", "QAGS_XSUM"]
+    data_dir: "datasets/SUM"
+  # D2T (Data-to-Text) — document-level Spearman/Kendall
+  d2t:
+    datasets: ["BAGEL", "SFHOT", "SFRES"]
+    data_dir: "datasets/D2T"
+    human_metrics: ["informativeness", "naturalness", "quality"]
+
+evaluation:
+  wmt:
+    metric: "kendall_tau"       # concordance-based Kendall τ (WMT-19 official)
+  sum:
+    metrics: ["spearman", "kendall_tau"]  # per-document averaged
+    special:
+      Rank19: "accuracy"        # correct vs incorrect ranking
+      QAGS_CNN: "pearson"       # Pearson with factuality
+      QAGS_XSUM: "pearson"
+  d2t:
+    metrics: ["spearman", "kendall_tau"]  # document-level
+  bootstrap:
+    n_resamples: 1000
+    confidence_level: 0.95
+  multi_seed:
+    seeds: [42, 123, 456]
+
+baselines:
+  bartscore:
+    model: "facebook/bart-large-cnn"
+  gptscore:
+    model: "gpt2-large"
+  bertscore:
+    model: "microsoft/deberta-xlarge-mnli"
+  unieval:
+    model: "MingZhong/unieval-sum"
+  alignscore:
+    model: "yzha/AlignScore-large"
+  geval:
+    model: "gpt-4"
+
+output:
+  log_dir: "outputs/logs"
+  result_dir: "outputs/results"
+  figure_dir: "outputs/figures"
+  save_predictions: true
